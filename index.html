@@ -1,0 +1,618 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+<title>Selamat Ulang Tahun, Papa</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Caveat:wght@600&display=swap" rel="stylesheet">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/gsap/3.12.5/gsap.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/gsap/3.12.5/Draggable.min.js"></script>
+<script>
+  // set --vh sedini mungkin biar gak ada "flash" salah tinggi di mobile (address bar dsb)
+  function setVH(){ document.documentElement.style.setProperty('--vh', window.innerHeight * 0.01 + 'px'); }
+  setVH();
+</script>
+<style>
+  :root{
+    --cream:#F3EAD8;
+    --gold:#C9A567;
+    --rose:#B06A4F;
+    --sage:#707C60;
+    --deep:#0E0D0B;
+    --vh: 1vh; /* di-override JS, fallback aman kalau JS belum jalan */
+  }
+  *{box-sizing:border-box; margin:0; padding:0;}
+  html{ scroll-behavior:smooth; }
+  html,body{ background:var(--deep); font-family: Georgia, 'Times New Roman', serif; color:var(--cream); }
+  body{ overflow-x:hidden; overscroll-behavior:none; }
+
+  #scrollWrap{
+    height: calc(var(--vh) * 100);
+    overflow-y:scroll; overflow-x:hidden;
+    scroll-snap-type: y mandatory;
+    -webkit-overflow-scrolling:touch;
+  }
+  @supports (height: 100dvh){
+    #scrollWrap{ height:100dvh; }
+  }
+  .section{
+    position:relative;
+    min-height: calc(var(--vh) * 100);
+    width:100vw;
+    display:flex; align-items:center; justify-content:center; flex-direction:column;
+    scroll-snap-align:start; scroll-snap-stop:always;
+    overflow:hidden;
+    padding: 6vh 4vw;
+  }
+  @supports (min-height: 100dvh){
+    .section{ min-height:100dvh; }
+  }
+
+  /* ambient dust canvas across whole page */
+  #dustCanvas{ position:fixed; inset:0; z-index:1; pointer-events:none; opacity:0.55; }
+
+  #vignette{ position:fixed; inset:0; pointer-events:none; z-index:2; box-shadow: inset 0 0 12vw 3vw rgba(0,0,0,0.6); }
+  #grain{
+    position:fixed; inset:0; pointer-events:none; z-index:2; opacity:0.05; mix-blend-mode:overlay;
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='120' height='120'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='2' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
+  }
+
+  #mute-btn{
+    position:fixed; top:max(4%, env(safe-area-inset-top)); right:max(4%, env(safe-area-inset-right)); z-index:50;
+    width:clamp(38px, 2.6vw, 48px); height:clamp(38px, 2.6vw, 48px); border-radius:50%;
+    background: rgba(255,255,255,0.08); border:1px solid rgba(255,255,255,0.25); color:var(--cream);
+    display:flex; align-items:center; justify-content:center; cursor:pointer; font-size:clamp(1rem, 1.1vw, 1.2rem); backdrop-filter: blur(4px);
+  }
+
+  #scrollHint{
+    position:fixed; bottom:max(4%, env(safe-area-inset-bottom)); left:50%; transform:translateX(-50%); z-index:50;
+    font-family:Arial,sans-serif; font-size:clamp(0.65rem, 0.75vw, 0.8rem); letter-spacing:0.25em; text-transform:uppercase;
+    color:rgba(243,234,216,0.55); display:flex; flex-direction:column; align-items:center; gap:0.4vw;
+    transition:opacity 0.5s ease;
+  }
+  #scrollHint .arrow{ font-size:clamp(1rem, 1.2vw, 1.3rem); animation:bob 1.6s ease-in-out infinite; }
+  @keyframes bob{ 0%,100%{transform:translateY(0);} 50%{transform:translateY(6px);} }
+
+  /* ===== SECTION 0: HERO ===== */
+  #hero{ background: radial-gradient(circle at 50% 35%, #221E17 0%, var(--deep) 75%); text-align:center; }
+  #hero .eyebrow{ font-family:Arial,sans-serif; letter-spacing:0.3em; text-transform:uppercase; font-size:clamp(0.75rem, 0.9vw, 1rem); color:var(--rose); position:relative; z-index:5;}
+  #hero h1{ font-size:clamp(2.4rem, 8vw, 5.2rem); line-height:1.08; margin-top:1vw; position:relative; z-index:5; }
+  #hero h1 em{ color:var(--gold); font-style:italic; }
+  #hero .years{ margin-top:1.4vw; font-family:Arial,sans-serif; letter-spacing:0.3em; font-size:clamp(0.85rem, 1.3vw, 1.35rem); color:rgba(243,234,216,0.65); position:relative; z-index:5;}
+  #hero .years b{ color:var(--gold); letter-spacing:normal; }
+
+  /* ===== SECTION 1: ENVELOPE (drag) ===== */
+  #envelopeSection{ background: radial-gradient(circle at 50% 40%, #1C1913 0%, var(--deep) 80%); }
+  .drop-target{
+    position:absolute; width:min(24vw, 340px); height:min(16vw, 230px); border:0.15vw dashed rgba(243,234,216,0.25); border-radius:0.6vw;
+    display:flex; align-items:center; justify-content:center; z-index:4; transition:border-color 0.3s ease, opacity 0.4s ease;
+  }
+  .drop-target span{ font-family:Arial,sans-serif; font-size:clamp(0.6rem, 0.75vw, 0.75rem); letter-spacing:0.2em; text-transform:uppercase; color:rgba(243,234,216,0.35); text-align:center; padding:0 1em; }
+  .drop-target.docked{ opacity:0; }
+
+  .stack-label{
+    position:absolute; left:6%; bottom:14%; font-family:Arial,sans-serif; font-size:clamp(0.6rem, 0.7vw, 0.75rem); letter-spacing:0.15em;
+    color:rgba(243,234,216,0.4); text-transform:uppercase; z-index:3;
+  }
+
+  .env-wrap{ position:absolute; left:8%; bottom:10%; z-index:10; touch-action:none; cursor:grab; }
+  .env-wrap.dragging{ cursor:grabbing; }
+  .env-wrap.docked{ cursor:pointer; }
+  .envelope{ width:min(20vw, 280px); height:min(13vw, 182px); position:relative; }
+  .env-back{ position:absolute; inset:0; background:linear-gradient(160deg, var(--rose), #8A4E38); border-radius:0.3vw; box-shadow:0 1vw 2.4vw rgba(0,0,0,0.5); }
+  .env-pocket{ position:absolute; left:0; right:0; bottom:0; height:60%; background:linear-gradient(160deg,#C9835F,var(--rose)); clip-path:polygon(0 100%, 50% 35%, 100% 100%); z-index:4; border-radius:0 0 0.3vw 0.3vw; }
+  .env-flap{
+    position:absolute; top:0; left:0; width:100%; height:52%;
+    background:linear-gradient(150deg,#D8946B,var(--rose));
+    clip-path:polygon(0 0, 100% 0, 50% 100%);
+    transform-origin:top center;
+    transition:transform 1s cubic-bezier(.6,-0.28,.5,1.5), z-index 0s 1s;
+    z-index:6;
+  }
+  .envelope.opened .env-flap{ transform:rotateX(178deg); z-index:1; }
+  .letter{
+    position:absolute; left:9%; right:9%; top:14%; height:0; overflow:hidden; opacity:0;
+    background:var(--cream); color:#2b2417; border-radius:0.2vw; box-shadow:0 1vw 2.4vw rgba(0,0,0,0.5);
+    transition: top 0.8s ease 0.35s, height 0.8s ease 0.35s, opacity 0.6s ease 0.5s; z-index:3;
+  }
+  .envelope.opened .letter{ top:-85%; height:160%; opacity:1; }
+  .letter-inner{
+    height:100%; padding:1.4rem 1.5rem; font-size:clamp(0.85rem, 0.95vw, 1rem); line-height:1.65;
+    overflow-y:auto; -webkit-overflow-scrolling:touch; overscroll-behavior:contain; touch-action:pan-y;
+    scrollbar-width:thin; scrollbar-color:var(--rose) transparent;
+  }
+  .letter-inner::-webkit-scrollbar{ width:6px; }
+  .letter-inner::-webkit-scrollbar-track{ background:transparent; }
+  .letter-inner::-webkit-scrollbar-thumb{ background:var(--rose); border-radius:999px; }
+  .letter-inner .sign{ margin-top:1em; font-family:Arial,sans-serif; font-size:clamp(0.7rem, 0.8vw, 0.8rem); color:var(--rose); }
+
+  .env-hint{
+    position:absolute; left:8%; bottom:2%; font-family:Arial,sans-serif; font-size:clamp(0.65rem, 0.75vw, 0.75rem); letter-spacing:0.15em;
+    text-transform:uppercase; color:rgba(243,234,216,0.45); z-index:10; transition:opacity 0.4s ease; text-align:left; max-width:80vw;
+  }
+
+  /* teaser polaroid that triggers zoom-through transition */
+  .teaser-photo{
+    position:absolute; right:8%; bottom:8%; width:min(9vw, 130px); height:min(11vw, 155px); background:#fff; padding:0.5vw 0.5vw 1.5vw;
+    box-shadow:0 1vw 2vw rgba(0,0,0,0.5); border-radius:0.15vw; transform:rotate(6deg); z-index:5; cursor:default;
+  }
+  .teaser-photo .ph{ width:100%; height:100%; background:linear-gradient(135deg, var(--sage), var(--gold)); display:flex; align-items:center; justify-content:center; font-family:Arial,sans-serif; font-size:0.6vw; color:rgba(0,0,0,0.4); text-align:center; overflow:hidden; }
+  .teaser-photo .ph img{ width:100%; height:100%; object-fit:cover; display:block; }
+
+  #transitionOverlay{
+    position:fixed; z-index:100; border-radius:0.4vw; overflow:hidden;
+    opacity:0; pointer-events:none; box-shadow:0 2vw 4vw rgba(0,0,0,0.5);
+  }
+  #transitionOverlay img{ width:100%; height:100%; object-fit:cover; display:block; }
+
+  /* ===== SECTION 2: GALLERY ===== */
+  #gallerySection{ align-items:stretch; padding:0; }
+  .gallery-title{
+    position:absolute; top:5%; left:50%; transform:translateX(-50%); z-index:20;
+    font-family:Arial,sans-serif; font-size:clamp(0.8rem, 0.9vw, 0.95rem); letter-spacing:0.25em; text-transform:uppercase; color:var(--rose);
+    text-align:center;
+  }
+  .gallery-hint{
+    position:absolute; top:9%; left:50%; transform:translateX(-50%); z-index:20;
+    font-family:Arial,sans-serif; font-size:clamp(0.65rem, 0.65vw, 0.7rem); letter-spacing:0.12em; color:rgba(243,234,216,0.4);
+    text-align:center;
+  }
+  #galleryField{ position:relative; width:100%; height:100%; }
+  .photo-card{
+    position:absolute; background:#fff; padding:0.5em 0.5em 1.6em;
+    box-shadow:0 0.8vw 1.6vw rgba(0,0,0,0.4); border-radius:0.15vw; cursor:grab; touch-action:none;
+  }
+  .photo-card.dragging{ cursor:grabbing; box-shadow:0 1.6vw 3vw rgba(0,0,0,0.55); z-index:30 !important; }
+  .photo-card .ph{ width:100%; display:flex; align-items:center; justify-content:center; font-family:Arial,sans-serif; font-size:0.7vw; color:rgba(0,0,0,0.4); text-align:center; overflow:hidden; }
+  .photo-card .ph img{ width:100%; height:100%; object-fit:cover; display:block; }
+  .photo-card .caption{
+    position:absolute; left:0.3em; right:0.3em; bottom:0.15em; text-align:center;
+    font-family:'Caveat', cursive; font-size:clamp(0.85rem, 1.1vw, 1.15rem); line-height:1.1; color:#5a4632;
+    white-space:nowrap; overflow:hidden; text-overflow:ellipsis;
+  }
+  .photo-card:nth-child(3n+1) .ph{ background:linear-gradient(135deg, #A9895A, var(--rose)); }
+  .photo-card:nth-child(3n+2) .ph{ background:linear-gradient(135deg, var(--sage), #8C7A4E); }
+  .photo-card:nth-child(3n) .ph{ background:linear-gradient(135deg, var(--sage), var(--gold)); }
+
+  #secretModal{ display:none; }
+
+  /* ===== SECTION 3: CANDLE CLOSING (compressed) ===== */
+  #candleSection{ background: radial-gradient(circle at 50% 55%, #241F16 0%, var(--deep) 78%); text-align:center; }
+  .cake{ position:relative; width:min(20vw, 280px); max-width:70vw; display:flex; justify-content:center; gap:1.2vw; flex-wrap:nowrap; }
+  .candle-unit{ display:flex; flex-direction:column; align-items:center; cursor:pointer; padding:0.5em; }
+  .flame{
+    width:clamp(8px, 0.55vw, 12px); height:clamp(16px, 1.1vw, 22px); border-radius:50% 50% 50% 50% / 60% 60% 40% 40%;
+    background: radial-gradient(circle at 50% 70%, #FFE29A, #FF9A3C 60%, #E85D2A);
+    box-shadow:0 0 1.4vw 0.4vw rgba(255,170,60,0.55); transform-origin:bottom center;
+    opacity:0; transform:scale(0.3);
+    transition: opacity 0.35s ease, transform 0.35s cubic-bezier(.34,1.56,.64,1);
+  }
+  .candle-unit.lit .flame{ opacity:1; transform:scale(1); animation: flicker 1.4s ease-in-out infinite alternate; }
+  .flame.out{ animation:none !important; opacity:0 !important; }
+  @keyframes flicker{ 0%{transform:scale(1) rotate(-2deg);} 50%{transform:scale(1.08) rotate(2deg);} 100%{transform:scale(0.96) rotate(-1deg);} }
+  .wick{ width:2px; height:clamp(10px, 0.8vw, 14px); background:#5a4632; }
+  .candle{ width:clamp(14px, 1vw, 18px); height:clamp(34px, 2.4vw, 42px); background:linear-gradient(180deg, var(--gold), #8C6A34); border-radius:2px; }
+  .candle-cap{
+    margin-top:0.3em; font-family:Arial,sans-serif; font-size:clamp(0.6rem, 0.6vw, 0.65rem); letter-spacing:0.1em; color:rgba(243,234,216,0.4);
+    text-transform:uppercase; opacity:0; transition:opacity 0.4s ease;
+  }
+  .candle-unit:not(.lit) .candle-cap{ opacity:1; }
+  .cake-body{
+    width:min(22vw, 320px); max-width:88vw; height:clamp(56px, 4.5vw, 72px); margin-top:0.4vw; border-radius:0.6vw 0.6vw 1.2vw 1.2vw;
+    background:linear-gradient(180deg, #E9D9BC, var(--cream) 40%, #D9B98B 40%, #C9A567);
+    box-shadow:0 1vw 2vw rgba(0,0,0,0.4); position:relative;
+  }
+  .smoke{ position:absolute; top:-1vw; width:8px; height:16px; background:rgba(220,220,220,0.6); border-radius:50%; filter:blur(3px); opacity:0; }
+  .smoke.rise{ animation: smokeUp 1.6s ease-out forwards; }
+  @keyframes smokeUp{ 0%{opacity:0.8; transform:translateY(0) scale(1);} 100%{opacity:0; transform:translateY(-4vw) scale(2.4);} }
+  .blow-btn{
+    margin-top:1.2em; font-family:Arial,sans-serif; font-size:clamp(0.85rem, 0.95vw, 1rem); letter-spacing:0.12em; text-transform:uppercase;
+    color:var(--deep); background:var(--gold); border:none; padding:0.9em 1.6em; border-radius:999px; cursor:pointer;
+    opacity:0; pointer-events:none; transition:opacity 0.5s ease; min-height:44px;
+  }
+  .blow-btn.ready{ opacity:1; pointer-events:auto; }
+  .closing-text{ margin-top:1em; font-size:clamp(1.1rem, 1.6vw, 1.6rem); text-align:center; opacity:0; padding:0 4vw; }
+  .closing-text em{ color:var(--gold); font-style:italic; }
+  .confetti-piece{ position:fixed; top:-2vw; width:8px; height:14px; opacity:0.9; z-index:110; }
+
+  /* ===== penyesuaian khusus layar sempit (hp) ===== */
+  @media (max-width:700px){
+    .env-wrap{ left:6%; bottom:24%; }
+    .envelope{ width:min(56vw, 300px); height:min(37vw, 200px); }
+    .drop-target{ width:min(60vw, 320px); height:min(40vw, 215px); }
+    .letter-inner{ font-size:0.95rem; padding:1.1rem 1.1rem; }
+    .letter-inner::-webkit-scrollbar{ width:4px; }
+    .teaser-photo{ display:none; }
+    .env-hint{ font-size:0.65rem; }
+    .cake{ max-width:80vw; gap:3vw; }
+    .cake-body{ max-width:92vw; }
+  }
+  @media (max-width:420px){
+    .envelope{ width:min(62vw, 260px); height:min(41vw, 172px); }
+    .drop-target{ width:min(66vw, 280px); height:min(44vw, 188px); }
+  }
+</style>
+</head>
+<body>
+
+<canvas id="dustCanvas"></canvas>
+<div id="vignette"></div>
+<div id="grain"></div>
+<button id="mute-btn" title="mute/unmute lagu">🔊</button>
+<div id="scrollHint"><span>gulir</span><span class="arrow">↓</span></div>
+<audio id="bgm" src="lagu.mp3" loop></audio>
+
+<div id="scrollWrap">
+
+  <!-- SECTION 0: HERO -->
+  <section class="section" id="hero">
+    <div class="eyebrow">Untuk sosok tercinta</div>
+    <h1>Selamat Ulang<br>Tahun, <em>Papap</em></h1>
+    <div class="years">25 July 1975 <b>&mdash;</b> 25 July 2026</div>
+  </section>
+
+  <!-- SECTION 1: ENVELOPE -->
+  <section class="section" id="envelopeSection">
+    <div class="stack-label">tumpukan surat lama</div>
+    <div class="drop-target" id="dropTarget"><span>tarik amplop ke sini</span></div>
+
+    <div class="teaser-photo" id="teaserPhoto">
+      <div class="ph"><img src="memories/11.jpg" alt="kenangan"></div>
+    </div>
+
+    <div class="env-wrap" id="envWrap">
+      <div class="envelope" id="envelope">
+        <div class="letter">
+          <div class="letter-inner">
+            Happy birthday, papap!<br><br>
+            Emm, gatau sih mau ngomong apa, intinya sehat selalu, panjang umur, selalu dimudahkan disetiap pekerjaannya, semoga masih sehat wal afiat sampe brina fira sukses nanti, maaf yaa kalo brina masih suka bandel, agak boros uang hehehe, brina juga coba2 belajar manage uang kok. Papap doain brina terus ya bisa lulus tepat waktu☺️ makasih juga udah selalu perhatian walaupun itu ga secara terang2an, selalu ngasih arahan yg baik juga, dan ngasih kesempatan buat keluar2 kota sendiri biar brina mandiri, banyak pengalaman sama belajar hal2 baru juga. Kayanya kalo brina ga nekat gabakal tau apa2 wkwkwk. Pokoknya makasih buat semuanya ya, Papap. Semoga Brina bisa bikin Papap bangga suatu hari nanti. 🤍
+            <div class="sign">— Brina</div>
+          </div>
+        </div>
+        <div class="env-pocket"></div>
+        <div class="env-back"></div>
+        <div class="env-flap"></div>
+      </div>
+    </div>
+    <div class="env-hint" id="envHint">tarik amplopnya, lalu klik untuk buka</div>
+  </section>
+
+  <!-- SECTION 2: GALLERY -->
+  <section class="section" id="gallerySection">
+    <div class="gallery-title">Album Kenangan</div>
+    <div class="gallery-hint">geser-geser fotonya</div>
+    <div id="galleryField"></div>
+  </section>
+
+  <!-- SECTION 3: CANDLE CLOSING -->
+  <section class="section" id="candleSection">
+    <div class="cake">
+      <!-- candle units injected by JS -->
+    </div>
+    <div class="cake-row-wrap" style="width:100%; display:flex; flex-direction:column; align-items:center;">
+      <div class="cake-body" id="cakeBody"></div>
+    </div>
+    <button class="blow-btn" id="blowBtn">🕯️ Tiup Lilin</button>
+    <div class="closing-text" id="closingText">Selamat Ulang Tahun, <em>Papa</em> 🎉<br>Semoga selalu sehat &amp; bahagia.</div>
+  </section>
+
+</div>
+
+<div id="transitionOverlay"><img src="memories/11.jpg" alt=""></div>
+
+<script>
+/* ============ VIEWPORT HEIGHT FIX (mobile address bar) ============ */
+let vhTimer = null;
+function debouncedSetVH(){
+  clearTimeout(vhTimer);
+  vhTimer = setTimeout(()=>{
+    setVH();
+    if(envDraggable) envDraggable.applyBounds(document.getElementById('envelopeSection'));
+    if(galleryDraggables && galleryDraggables.length) galleryDraggables.forEach(d=> d.applyBounds(galleryField));
+  }, 120);
+}
+window.addEventListener('resize', debouncedSetVH);
+window.addEventListener('orientationchange', debouncedSetVH);
+
+/* ============ AMBIENT DUST PARTICLES ============ */
+const canvas = document.getElementById('dustCanvas');
+const ctx = canvas.getContext('2d');
+function resizeCanvas(){ canvas.width = window.innerWidth; canvas.height = window.innerHeight; }
+resizeCanvas();
+window.addEventListener('resize', resizeCanvas);
+
+const isMobile = window.matchMedia('(max-width:700px)').matches;
+const particleCount = isMobile ? 28 : 55;
+const particles = Array.from({length: particleCount}, () => spawnParticle());
+function spawnParticle(fromBottom){
+  return {
+    x: Math.random()*window.innerWidth,
+    y: fromBottom ? window.innerHeight + 10 : Math.random()*window.innerHeight,
+    r: Math.random()*1.6 + 0.4,
+    speed: Math.random()*0.35 + 0.08,
+    drift: (Math.random()-0.5)*0.3,
+    alpha: Math.random()*0.5 + 0.15
+  };
+}
+function tickDust(){
+  ctx.clearRect(0,0,canvas.width, canvas.height);
+  ctx.fillStyle = '#C9A567';
+  particles.forEach(p=>{
+    p.y -= p.speed;
+    p.x += p.drift;
+    if(p.y < -10){ Object.assign(p, spawnParticle(true)); }
+    ctx.globalAlpha = p.alpha;
+    ctx.beginPath();
+    ctx.arc(p.x, p.y, p.r, 0, Math.PI*2);
+    ctx.fill();
+  });
+  ctx.globalAlpha = 1;
+  requestAnimationFrame(tickDust);
+}
+tickDust();
+
+/* ============ AUDIO ============ */
+const bgm = document.getElementById('bgm');
+const muteBtn = document.getElementById('mute-btn');
+let audioStarted = false;
+function tryPlayAudio(){
+  if(audioStarted) return;
+  bgm.volume = 0;
+  bgm.play().then(()=>{
+    audioStarted = true;
+    gsap.to(bgm, {volume:0.55, duration:2.5, ease:'power1.inOut'});
+  }).catch(()=>{});
+}
+muteBtn.addEventListener('click', ()=>{
+  if(bgm.muted){ bgm.muted = false; muteBtn.textContent = '🔊'; } else { bgm.muted = true; muteBtn.textContent = '🔇'; }
+  if(!audioStarted) tryPlayAudio();
+});
+document.body.addEventListener('pointerdown', tryPlayAudio, {once:true});
+
+/* ============ SCROLL HINT (fade when scrolling begins) ============ */
+const scrollWrap = document.getElementById('scrollWrap');
+const scrollHint = document.getElementById('scrollHint');
+scrollWrap.addEventListener('scroll', ()=>{
+  scrollHint.style.opacity = scrollWrap.scrollTop > 40 ? '0' : '1';
+}, {passive:true});
+
+/* ============ SECTION 1: DRAG ENVELOPE INTO TARGET ============ */
+const envWrap = document.getElementById('envWrap');
+const dropTarget = document.getElementById('dropTarget');
+const envelope = document.getElementById('envelope');
+const envHint = document.getElementById('envHint');
+let envDocked = false;
+
+function checkDropDistance(){
+  const wrapRect = envWrap.getBoundingClientRect();
+  const targetRect = dropTarget.getBoundingClientRect();
+  const wrapCenter = { x: wrapRect.left + wrapRect.width/2, y: wrapRect.top + wrapRect.height/2 };
+  const targetCenter = { x: targetRect.left + targetRect.width/2, y: targetRect.top + targetRect.height/2 };
+  const dist = Math.hypot(wrapCenter.x - targetCenter.x, wrapCenter.y - targetCenter.y);
+  return dist < Math.min(targetRect.width, targetRect.height) * 0.4;
+}
+
+let envDraggable = null;
+if(window.Draggable){
+  envDraggable = Draggable.create(envWrap, {
+    type: 'x,y',
+    bounds: document.getElementById('envelopeSection'),
+    onDragStart: ()=> envWrap.classList.add('dragging'),
+    onDragEnd: function(){
+      envWrap.classList.remove('dragging');
+      if(!envDocked && checkDropDistance()){
+        dockEnvelope();
+      } else if(!envDocked){
+        gsap.to(envWrap, {x:0, y:0, duration:0.6, ease:'power3.out'});
+      }
+    }
+  })[0];
+}
+
+function dockEnvelope(){
+  envDocked = true;
+  const wrapRect = envWrap.getBoundingClientRect();
+  const targetRect = dropTarget.getBoundingClientRect();
+  const dx = (targetRect.left + targetRect.width/2) - (wrapRect.left + wrapRect.width/2);
+  const dy = (targetRect.top + targetRect.height/2) - (wrapRect.top + wrapRect.height/2);
+  const currentX = gsap.getProperty(envWrap, 'x');
+  const currentY = gsap.getProperty(envWrap, 'y');
+  gsap.to(envWrap, {
+    x: currentX + dx, y: currentY + dy, duration:0.5, ease:'power3.out',
+    onComplete: ()=>{
+      if(envDraggable) envDraggable.disable();
+      envWrap.classList.add('docked');
+      dropTarget.classList.add('docked');
+      envHint.textContent = 'klik untuk membuka';
+    }
+  });
+}
+
+envWrap.addEventListener('click', ()=>{
+  if(!envDocked) return;
+  if(envelope.classList.contains('opened')) return;
+  envelope.classList.add('opened');
+  envHint.style.opacity = '0';
+  tryPlayAudio();
+});
+
+/* ============ TRANSITION: teaser photo zoom-through into gallery ============ */
+const teaserPhoto = document.getElementById('teaserPhoto');
+const overlay = document.getElementById('transitionOverlay');
+const gallerySection = document.getElementById('gallerySection');
+let transitionFired = false;
+
+const transitionObserver = new IntersectionObserver((entries)=>{
+  entries.forEach(entry=>{
+    if(entry.isIntersecting && entry.intersectionRatio > 0.6 && !transitionFired){
+      transitionFired = true;
+      fireZoomTransition();
+    }
+  });
+}, {threshold:[0.6]});
+transitionObserver.observe(gallerySection);
+
+function fireZoomTransition(){
+  // di mobile teaser-photo disembunyikan (display:none), jadi transisi zoom di-skip otomatis
+  if(getComputedStyle(teaserPhoto).display === 'none') return;
+  const rect = teaserPhoto.getBoundingClientRect();
+  gsap.set(overlay, { left:rect.left, top:rect.top, width:rect.width, height:rect.height, opacity:1, rotate:6 });
+  gsap.to(overlay, {
+    left:0, top:0, width:'100vw', height:'100vh', rotate:0, duration:0.9, ease:'power3.inOut',
+    onComplete: ()=>{
+      gsap.to(overlay, { opacity:0, duration:0.6, delay:0.15, onComplete: ()=> gsap.set(overlay, {width:0, height:0}) });
+    }
+  });
+}
+
+/* ============ SECTION 2: SCATTERED DRAGGABLE GALLERY (responsif) ============ */
+const galleryField = document.getElementById('galleryField');
+/* ganti src sesuai nama file foto kamu di folder memories/ — caption boleh dikosongin '' kalau gamau ada tulisan */
+const photos = [
+  {src:'memories/11.jpg',  ratio:'1/1',  caption:'in another life STAN...'},
+  {src:'memories/12.jpg',  ratio:'1/1',  caption:'ambil raporttt'},
+  {src:'memories/13.jpg',  ratio:'1/1',  caption:'<333333'},
+  {src:'memories/41.jpg',  ratio:'4/3',  caption:'makan:b'},
+  {src:'memories/42.jpg',  ratio:'4/3',  caption:'makan lagi:b'},
+  {src:'memories/43.jpg',  ratio:'4/3',  caption:'brina kecik🤏'},
+  {src:'memories/44.jpg',  ratio:'4/3',  caption:'jalan2 dg sepatu rodaku:3'},
+  {src:'memories/45.jpg',  ratio:'4/3',  caption:''},
+  {src:'memories/46.jpg',  ratio:'4/3',  caption:'fira kecik🤏'},
+  {src:'memories/47.jpg',  ratio:'4/3',  caption:''},
+  {src:'memories/161.jpg', ratio:'16/9', caption:'✌️✌️'},
+  {src:'memories/162.jpg', ratio:'16/9', caption:''}
+];
+
+let galleryDraggables = [];
+let galleryBuilt = false;
+
+// bikin layout grid-jitter yang otomatis menyesuaikan lebar layar,
+// jadi foto ga akan pernah kepotong/keluar dari batas kontainer di HP maupun desktop
+function buildGalleryLayout(){
+  const fieldW = galleryField.clientWidth;
+  const fieldH = galleryField.clientHeight;
+  const narrow = fieldW < 700;
+  const cols = narrow ? 2 : 4;
+  const rows = Math.ceil(photos.length / cols);
+
+  const cardW = narrow ? Math.min(fieldW * 0.42, 190) : Math.min(fieldW * 0.13, 190);
+  galleryField.querySelectorAll('.photo-card').forEach(c=> c.style.width = cardW + 'px');
+
+  const topStart = fieldH * (narrow ? 0.16 : 0.18);
+  const topEnd = fieldH * 0.86;
+  const cellW = fieldW / cols;
+  const cellH = Math.max((topEnd - topStart) / rows, cardW * 0.7);
+
+  const cards = galleryField.querySelectorAll('.photo-card');
+  cards.forEach((card, idx)=>{
+    const col = idx % cols;
+    const row = Math.floor(idx / cols);
+    const jitterX = (Math.random()-0.5) * cellW * 0.25;
+    const jitterY = (Math.random()-0.5) * cellH * 0.2;
+    let left = cellW * col + (cellW - cardW)/2 + jitterX;
+    let top = topStart + cellH * row + jitterY;
+    // clamp biar ga keluar batas
+    left = Math.max(8, Math.min(left, fieldW - cardW - 8));
+    top = Math.max(8, Math.min(top, fieldH - 40));
+    card.style.left = left + 'px';
+    card.style.top = top + 'px';
+    // reset transform drag lama biar posisi baru berlaku bersih
+    gsap.set(card, {x:0, y:0, rotate:(Math.random()*14-7)});
+  });
+}
+
+function initGallery(){
+  if(!galleryBuilt){
+    layoutSeed().forEach((pos, idx)=>{
+      const card = document.createElement('div');
+      card.className = 'photo-card';
+      card.style.zIndex = 5 + idx;
+      const captionHtml = photos[idx].caption ? '<div class="caption">' + photos[idx].caption + '</div>' : '';
+      card.innerHTML = '<div class="ph" style="aspect-ratio:' + photos[idx].ratio + '"><img src="' + photos[idx].src + '" alt="kenangan ' + (idx+1) + '"></div>' + captionHtml;
+      galleryField.appendChild(card);
+    });
+    galleryBuilt = true;
+  }
+  buildGalleryLayout();
+
+  if(window.Draggable && !galleryDraggables.length){
+    galleryDraggables = Draggable.create('.photo-card', {
+      type:'x,y',
+      bounds: galleryField,
+      onPress: function(){ this.target.classList.add('dragging'); },
+      onDragEnd: function(){ this.target.classList.remove('dragging'); }
+    });
+  }
+}
+function layoutSeed(){ return photos; } // placeholder biar urutan kartu konsisten dgn array photos
+
+// bangun galeri begitu section-nya mendekati layar, supaya clientWidth sudah akurat
+const galleryObserver = new IntersectionObserver((entries)=>{
+  entries.forEach(entry=>{
+    if(entry.isIntersecting){ initGallery(); }
+  });
+}, {threshold:[0.1]});
+galleryObserver.observe(gallerySection);
+
+let galleryResizeTimer = null;
+window.addEventListener('resize', ()=>{
+  clearTimeout(galleryResizeTimer);
+  galleryResizeTimer = setTimeout(()=>{ if(galleryBuilt) buildGalleryLayout(); }, 200);
+});
+
+/* ============ SECTION 3: CANDLES ============ */
+const cake = document.querySelector('.cake');
+const cakeBody = document.getElementById('cakeBody');
+const blowBtn = document.getElementById('blowBtn');
+const closingText = document.getElementById('closingText');
+const candleSection = document.getElementById('candleSection');
+const colors = ['#C9A567','#B06A4F','#707C60','#F3EAD8'];
+const totalCandles = 3;
+let litCount = 0;
+
+for(let i=0;i<totalCandles;i++){
+  const unit = document.createElement('div');
+  unit.className = 'candle-unit';
+  unit.innerHTML = '<div class="flame"></div><div class="wick"></div><div class="candle"></div><div class="candle-cap">klik</div>';
+  unit.addEventListener('click', ()=>{
+    if(unit.classList.contains('lit')) return;
+    unit.classList.add('lit');
+    litCount++;
+    tryPlayAudio();
+    if(litCount === totalCandles){
+      blowBtn.classList.add('ready');
+    }
+  });
+  cake.appendChild(unit);
+}
+
+blowBtn.addEventListener('click', ()=>{
+  document.querySelectorAll('.candle-unit .flame').forEach(f=> f.classList.add('out'));
+  const smoke = document.createElement('div');
+  smoke.className = 'smoke rise';
+  smoke.style.left = '50%'; smoke.style.transform = 'translateX(-50%)';
+  cakeBody.parentElement.insertBefore(smoke, cakeBody);
+
+  const sectionRect = candleSection.getBoundingClientRect();
+  const confettiCount = isMobile ? 24 : 40;
+  for(let i=0;i<confettiCount;i++){
+    const c = document.createElement('div');
+    c.className = 'confetti-piece';
+    c.style.left = (sectionRect.left + Math.random()*sectionRect.width) + 'px';
+    c.style.top = sectionRect.top + 'px';
+    c.style.background = colors[i % colors.length];
+    document.body.appendChild(c);
+    gsap.to(c, {
+      y: sectionRect.height + 200, x: (Math.random()-0.5)*200, rotate: Math.random()*720,
+      duration: 2.2 + Math.random()*1.6, delay: Math.random()*0.4, ease:'power1.in',
+      onComplete: ()=> c.remove()
+    });
+  }
+  gsap.to(closingText, {opacity:1, y:0, duration:1, delay:0.4, ease:'power2.out'});
+  gsap.to(blowBtn, {opacity:0, duration:0.5, delay:0.2, onComplete: ()=> blowBtn.style.display='none'});
+});
+</script>
+
+</body>
+</html>
